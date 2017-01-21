@@ -109,7 +109,7 @@ class Tree:
         pos = [(x_pos[node], -y_pos[node]) for node in range(self.check_nodes())]
         nx.draw_networkx_nodes(graph, pos, node_size=3000, node_color='#A0CBE2')
         nx.draw_networkx_edges(graph, pos, edges)
-        nx.draw_networkx_labels(graph, pos, labels, 12)
+        nx.draw_networkx_labels(graph, pos, labels, 8)
         plt.show()
 
     def check_descendants(self):
@@ -143,6 +143,7 @@ def generate_random_tree(features, terminal_node_callback, max_depth=10, iterati
 
 def crossover_trees(tree1, tree2, co_factor=(0.5, 0.5)):
     from random import random, choice
+    from copy import deepcopy as dc
     tree = tree1
 
     path1 = [choice(range(2))]
@@ -154,7 +155,7 @@ def crossover_trees(tree1, tree2, co_factor=(0.5, 0.5)):
     while type(tree2[path2]) == type(Tree()) and random() > co_factor[1]:
         path2.append(choice(range(2)))
 
-    tree[path1] = tree2[path2]
+    tree[path1] = dc(tree2[path2])
 
     return tree
 
@@ -164,18 +165,17 @@ def _random_prune(tree, terminal_node_callback, prune_factor=0.66):
 
     path = []
 
-    while len(path) < 1:
-        path = [choice(range(2))]
+    if tree.check_descendants() > 2:
+        while len(path) < 1:
+            path = [choice(range(2))]
 
-        while type(tree[path]) == type(Tree()) and random() > prune_factor:
-            path.append(choice(range(2)))
+            while type(tree[path]) == type(Tree()) and random() > prune_factor:
+                path.append(choice(range(2)))
 
-        if type(tree[path]) != type(Tree()):
-            path = path[:-1]
+            if type(tree[path]) != type(Tree()):
+                path = path[:-1]
 
-    print(path)
-
-    tree[path] = terminal_node_callback()
+        tree[path] = terminal_node_callback()
 
     return tree
 
@@ -201,24 +201,25 @@ def _random_branch_mutation(tree, features, branch_mutation_factor=0.66):
 
     path = []
 
-    while len(path) < 1:
-        path = [choice(range(2))]
+    if tree.check_descendants() > 2:
+        while len(path) < 1:
+            path = [choice(range(2))]
 
-        while type(tree[path]) == type(Tree()) and random() > branch_mutation_factor:
-            path.append(choice(range(2)))
+            while type(tree[path]) == type(Tree()) and random() > branch_mutation_factor:
+                path.append(choice(range(2)))
 
-        if type(tree[path]) != type(Tree()):
-            path = path[:-1]
+            if type(tree[path]) != type(Tree()):
+                path = path[:-1]
 
-    if random() > 0.5:
-        tree[path].feature = choice(range(features))
-    else:
-        tree[path].threshold_value = random() * 2 - 1
+        if random() > 0.5:
+            tree[path].feature = choice(range(features))
+        else:
+            tree[path].threshold_value = random() * 2 - 1
 
     return tree
 
 
-def tree_mutation(tree, features, terminal_node_callback, f1, f2, f3):
+def tree_mutation(tree, features, terminal_node_callback, f1=0.3, f2=0.3, f3=0.4):
     from random import random
 
     if f1 + f2 + f3 == 1:
