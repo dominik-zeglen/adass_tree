@@ -1,18 +1,22 @@
-from copy import deepcopy as dc
-from tree import generate_random_tree, crossover_trees, tree_mutation
-from random import random, choice, sample
-from time import time
-
-import numpy as np
-
-
 class AdaSS:
     def __init__(self, **kwargs):
+        from copy import deepcopy as dc
+
         self.pool = dc(kwargs['pool'])
         self.tree = None
 
-    def fit(self, max_init_depth, max_iterations, decay_time, f_mut, f_co, f_el, n_trees, train, validation, **kwargs):
+    def fit(self, max_init_depth, max_iterations, decay_time, f_mut, f_co, f_el, n_trees, train, validation,
+            max_clusters, **kwargs):
+        from copy import deepcopy as dc
+        from adass_weightarray_helpers import generate_random_individual, crossover_individuals, individual_mutation
+        from random import random, choice, sample, seed
+        from time import time
+
+        import numpy as np
+
         start_time = time()
+        if 'random_state' in kwargs:
+            seed(kwargs['random_state'])
 
         if f_mut + f_co + f_el != 1:
             raise Exception('Factors do not sum to 1')
@@ -20,10 +24,10 @@ class AdaSS:
         train = train
         validation = validation
 
-        def evaluate_tree(tree, type):
+        def evaluate_individual(individual, type):
             if type == 'train':
                 labels = np.transpose([classifier.predict(train[0]) for classifier in self.pool])
-                weights = tree.eval(train[0])
+                weights = individual.eval(train[0])
                 classes = np.max(labels)
                 categorical_labels = np.zeros((len(train[0]), classes + 1)).tolist()
                 for object_index in range(len(train[0])):
@@ -34,9 +38,10 @@ class AdaSS:
 
                 return sum([1 if decisions[i] == train[1][i] else 0 for i in range(len(train[1]))]) * 1. / len(train[0])
 
+
             elif type == 'validation':
                 labels = np.transpose([classifier.predict(validation[0]) for classifier in self.pool])
-                weights = tree.eval(validation[0])
+                weights = individual.eval(validation[0])
                 classes = np.max(labels)
                 categorical_labels = np.zeros((len(validation[0]), classes + 1)).tolist()
                 for object_index in range(len(validation[0])):
@@ -54,9 +59,11 @@ class AdaSS:
 
         print('Initialization completed, \ttime: %0.2f' % (time() - start_time))
 
-        population = [generate_random_tree(len(train[0][0]),
-                                           lambda: [random() for i in range(len(self.pool))],
-                                           max_init_depth) for i in range(n_trees)]
+        population = [generate_random_individual(len(train[0][0]),
+                                                 len(self.pool),
+                                                 lambda: int(random() * max_clusters),
+                                                 max_clusters,
+                                                 max_init_depth) for i in range(n_trees)]
         elite = None
         best_in_cycle = [(0, 0)]
         no_improvement_cycles = 0
@@ -70,27 +77,29 @@ class AdaSS:
                 crossover = sample(range(len(population)), int(len(population) * f_co))
 
                 for tree_index in mutation:
-                    new_generation.append(tree_mutation(population[tree_index],
-                                                        len(train[0][0]),
-                                                        lambda: [random() for i in range(len(self.pool))],
-                                                        f1=0.8 * (1 - cycle / max_iterations),
-                                                        f2=0.2))
+                    new_generation.append(individual_mutation(population[tree_index],
+                                                              len(train[0][0]),
+                                                              len(self.pool),
+                                                              lambda: int(random() * max_clusters),
+                                                              f1=0.8 * (1 - cycle / max_iterations),
+                                                              f2=0.2,
+                                                              f3=1 - cycle / max_iterations))
 
                 for tree_index in crossover:
-                    new_generation.append(crossover_trees(population[tree_index],
-                                                          choice(population)))
+                    new_generation.append(crossover_individuals(population[tree_index],
+                                                                choice(population)))
 
                 population = dc(new_generation) + dc(elite)
 
-            tree_sizes = [tree.check_descendants() + 1 for tree in population]
+            tree_sizes = [ind.tree.check_descendants() + 1 for ind in population]
             print('Population size:\t%d' % len(population))
             print('Tree size \tMin: %d\tMax: %d\tAverage: %0.1f' %
                   (min(tree_sizes), max(tree_sizes), np.mean(tree_sizes)))
-            accuracy_train = sorted([(evaluate_tree(tree, 'train'), tree_index)
-                                     for tree_index, tree in enumerate(population)], key=lambda x: x[0])[::-1]
-            accuracy_validation = sorted([(evaluate_tree(tree, 'validation'), tree_index)
-                                          for tree_index, tree in enumerate(population)], key=lambda x: x[0])[::-1]
-            elite = [dc(population[tree_index[1]]) for tree_index in accuracy_train[:int(n_trees * f_el)]]
+            accuracy_train = sorted([(evaluate_individual(ind, 'train'), ind_index)
+                                     for ind_index, ind in enumerate(population)], key=lambda x: x[0])[::-1]
+            accuracy_validation = sorted([(evaluate_individual(ind, 'validation'), ind_index)
+                                          for ind_index, ind in enumerate(population)], key=lambda x: x[0])[::-1]
+            elite = [dc(population[ind_index[1]]) for ind_index in accuracy_train[:int(n_trees * f_el)]]
             best_in_cycle.append((accuracy_train[0][0], accuracy_validation[0][0]))
             print('Best in cycle trees: %0.4f, %0.4f, \ttime: %0.2f' % (*best_in_cycle[-1], time() - start_time))
 
@@ -105,6 +114,8 @@ class AdaSS:
         return best_in_cycle[1:]
 
     def predict(self, test, **kwargs):
+        import numpy as np
+
         labels = np.transpose([classifier.predict(test) for classifier in self.pool])
         weights = self.tree.eval(test)
         classes = np.max(labels)

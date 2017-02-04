@@ -160,7 +160,7 @@ def crossover_trees(tree1, tree2, co_factor=(0.5, 0.5)):
     return tree
 
 
-def _random_prune(tree, terminal_node_callback, prune_factor=0.66):
+def _random_prune(tree, terminal_node_callback, prune_factor=0.33):
     from random import random, choice
 
     path = []
@@ -219,10 +219,10 @@ def _random_branch_mutation(tree, features, branch_mutation_factor=0.66):
     return tree
 
 
-def tree_mutation(tree, features, terminal_node_callback, f1=0.3, f2=0.3, f3=0.4):
+def tree_mutation(tree, features, terminal_node_callback, f1=0.33, f2=0.33):
     from random import random
 
-    if f1 + f2 + f3 == 1:
+    if f1 + f2 < 1:
         roll = random()
 
         if roll > f1 + f2:
@@ -233,4 +233,4 @@ def tree_mutation(tree, features, terminal_node_callback, f1=0.3, f2=0.3, f3=0.4
             return _random_terminal_mutation(tree, terminal_node_callback)
 
     else:
-        raise Exception('Factors do not sum to 1')
+        raise Exception('Factors sum to 1 or more')
