@@ -27,6 +27,9 @@ class AdaSS:
         num_t_obs = len(train[0])
         num_v_obs = len(validation[0])
 
+        def generate_terminal_node():
+            return [[random() for j in range(num_classes)] for i in range(len(self.pool))]
+
         def evaluate_tree(tree, type):
             if type == 'train':
                 labels = np.transpose([classifier.predict(train[0]) for classifier in self.pool])
@@ -35,7 +38,7 @@ class AdaSS:
                 for object_index in range(num_t_obs):
                     for classifier_index in range(len(self.pool)):
                         categorical_labels[object_index][labels[object_index][classifier_index]] += \
-                            weights[object_index][classifier_index]
+                            weights[object_index][classifier_index][labels[object_index][classifier_index]]
                 decisions = [label_list.index(max(label_list)) for label_list in categorical_labels]
 
                 return sum([1 if decisions[i] == train[1][i] else 0 for i in range(num_t_obs)]) * 1. / num_t_obs
@@ -47,7 +50,7 @@ class AdaSS:
                 for object_index in range(num_v_obs):
                     for classifier_index in range(len(self.pool)):
                         categorical_labels[object_index][labels[object_index][classifier_index]] += \
-                            weights[object_index][classifier_index]
+                            weights[object_index][classifier_index][labels[object_index][classifier_index]]
                 decisions = [label_list.index(max(label_list)) for label_list in categorical_labels]
 
                 return sum([1 if decisions[i] == validation[1][i] else 0 for i in range(num_v_obs)]) * 1. / num_v_obs
@@ -59,7 +62,7 @@ class AdaSS:
             print('Initialization completed, \ttime: %0.2f' % (time() - start_time))
 
         population = [generate_random_tree(num_features,
-                                           lambda: [random() for i in range(len(self.pool))],
+                                           generate_terminal_node,
                                            max_init_depth) for i in range(n_trees)]
         elite = None
         best_in_cycle = [(0, 0)]
@@ -78,7 +81,7 @@ class AdaSS:
                 for tree_index in mutation:
                     new_generation.append(tree_mutation(population[tree_index],
                                                         num_features,
-                                                        lambda: [random() for i in range(len(self.pool))],
+                                                        generate_terminal_node,
                                                         f1=0.8 * (1 - cycle / max_iterations),
                                                         f2=0.2))
 
@@ -121,7 +124,7 @@ class AdaSS:
         for object_index in range(len(test)):
             for classifier_index in range(len(self.pool)):
                 categorical_labels[object_index][labels[object_index][classifier_index]] += weights[object_index][
-                    classifier_index]
+                    classifier_index][labels[object_index][classifier_index]]
         decisions = [label_list.index(max(label_list)) for label_list in categorical_labels]
 
         return decisions
