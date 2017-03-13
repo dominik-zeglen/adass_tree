@@ -116,7 +116,7 @@ class Tree:
         return sum([child.check_descendants() if type(Tree()) == type(child) else 0 for child in self.nodes]) + 2
 
     def check_height(self):
-        return sum([child.check_height() if type(Tree()) == type(child) else 1 for child in self.nodes])
+        return max([child.check_height() if type(Tree()) == type(child) else 1 for child in self.nodes]) + 1
 
     def check_depth(self):
         return self.check_height() - 1

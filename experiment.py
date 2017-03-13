@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from random import choice, seed, random
-from adass import AdaSS
-from load_cmc import load_cmc
+from adass_old import AdaSS
+from load_dataset import load_qsar as load_dataset
 from pool_methods import BootstrapPool
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import KFold
@@ -17,54 +17,50 @@ random_seed = 2229
 seed(random_seed)
 
 
-objects, labels, num_features, num_classes = load_cmc()
+objects, labels, num_features, num_classes = load_dataset()
 pool = BootstrapPool(DecisionTreeClassifier, 30, random_state=random_seed).fit(
     *np.transpose([choice(np.array([objects, labels]).T) for i in range(int(len(labels) / 2))])
 ).get_classifiers()
 scores = []
 
 iterator = 0
-kfold5 = KFold(n_splits=5, random_state=random_seed)
+kfold5 = KFold(n_splits=10, random_state=random_seed)
 for learn_indexes, test_indexes in kfold5.split(objects, labels):
     learn = [[objects[index] for index in learn_indexes], [labels[index] for index in learn_indexes]]
     test = [[objects[index] for index in test_indexes], [labels[index] for index in test_indexes]]
 
-    kfold2 = KFold(n_splits=2, random_state=random_seed)
-    for train_indexes, val_indexes in kfold2.split(learn[0]):
-        update_progress(iterator)
-        iterator += 1
-        train = [[learn[0][index] for index in train_indexes], [learn[1][index] for index in train_indexes]]
-        validation = [[learn[0][index] for index in val_indexes], [learn[1][index] for index in val_indexes]]
+    update_progress(iterator)
+    iterator += 1
 
-        for classifier in pool:
-            scores.append(sum(
-                [1. if classifier.predict([test[0][i]])[0] == test[1][i] else 0. for i in range(len(test[1]))]) / len(
-                test[1]))
+    for classifier in pool:
+        scores.append(sum(
+            [1. if classifier.predict([test[0][i]])[0] == test[1][i] else 0. for i in range(len(test[1]))]) / len(
+            test[1]))
 
-        adass = AdaSS(pool=pool)
-        efficiency = adass.fit(train=train,
-                               validation=validation,
-                               max_init_depth=12,
-                               decay_time=3,
-                               max_iterations=20,
-                               f_co=0.65,
-                               f_mut=0.2,
-                               f_el=0.15,
-                               n_trees=40)
+    adass = AdaSS(pool=pool)
+    efficiency = adass.fit(learn=learn,
+                           n_clusters=16,
+                           decay_time=3,
+                           mut_range=0.2,
+                           max_iterations=20,
+                           f_co=0.65,
+                           f_mut=0.2,
+                           f_el=0.15,
+                           n_population=40)
 
-        efficiency = np.transpose(efficiency)
+    efficiency = np.transpose(efficiency)
 
-        plt.subplot(2, 5, iterator)
-        plt.plot(range(len(efficiency[0])), efficiency[0], 'b', range(len(efficiency[1])), efficiency[1], 'r')
-        for score in scores[-len(pool):]:
-            plt.axhline(score, color='g', linestyle='dashed')
+    plt.subplot(2, 5, iterator)
+    plt.plot(range(len(efficiency[0])), efficiency[0], 'b', range(len(efficiency[1])), efficiency[1], 'r')
+    for score in scores[-len(pool):]:
+        plt.axhline(score, color='g', linestyle='dashed')
 
-        scores.append(
-            sum([1. if adass.predict([test[0][i]])[0] == test[1][i] else 0. for i in range(len(test[1]))]) / len(
-                test[1]))
-        plt.axhline(scores[-1], color='g')
+    scores.append(
+        sum([1. if adass.predict([test[0][i]])[0] == test[1][i] else 0. for i in range(len(test[1]))]) / len(
+            test[1]))
+    plt.axhline(scores[-1], color='g')
 
-        update_progress(iterator)
+    update_progress(iterator)
 
 plt.show()
 plt.boxplot(np.array(scores).reshape((10, len(pool) + 1)))

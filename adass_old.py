@@ -1,19 +1,21 @@
 from copy import deepcopy as dc
-from tree import generate_random_tree, crossover_trees, tree_mutation
-from random import random, choice, sample
+from random import random, choice, sample, gauss
 from time import time
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class AdaSS:
     def __init__(self, **kwargs):
         self.pool = dc(kwargs['pool'])
-        self.tree = None
+        self.model = None
 
-    def fit(self, max_init_depth, max_iterations, decay_time, f_mut, f_co, f_el,
-            n_trees, learn, verbose=False, **kwargs):
+    def fit(self, n_clusters, max_iterations, decay_time, f_mut, f_co, f_el,
+            n_population, mut_range, learn, verbose=False, **kwargs):
         from collections import Counter
+        from sklearn.model_selection import ShuffleSplit
+        from numpy.linalg import norm
 
         start_time = time()
 
@@ -28,10 +30,12 @@ class AdaSS:
         num_t_obs = len(train[0])
         num_v_obs = len(validation[0])
 
-        def evaluate_tree(tree, type):
+        def evaluate_chromosome(c, w, type):
             if type == 'train':
                 labels = np.transpose([classifier.predict(train[0]) for classifier in self.pool])
-                weights = tree.eval(train[0])
+                distances = np.asarray([np.asarray(train[0]) - centroid for centroid in c])
+                distances = np.transpose(np.sum(distances * distances, axis=2)).tolist()
+                weights = [w[obs.index(min(obs))] for obs in distances]
                 categorical_labels = np.zeros((num_t_obs, num_classes + 1)).tolist()
                 for object_index in range(num_t_obs):
                     for classifier_index in range(len(self.pool)):
@@ -43,7 +47,9 @@ class AdaSS:
 
             elif type == 'validation':
                 labels = np.transpose([classifier.predict(validation[0]) for classifier in self.pool])
-                weights = tree.eval(validation[0])
+                distances = np.asarray([np.asarray(validation[0]) - centroid for centroid in c])
+                distances = np.transpose(np.sum(distances * distances, axis=2)).tolist()
+                weights = [w[obs.index(min(obs))] for obs in distances]
                 categorical_labels = np.zeros((num_v_obs, num_classes + 1)).tolist()
                 for object_index in range(num_v_obs):
                     for classifier_index in range(len(self.pool)):
@@ -56,12 +62,30 @@ class AdaSS:
             else:
                 raise Exception('Bad type %s; expected train or validation' % type)
 
+        def mt(ind, m_range, f):
+            c = np.array(ind[0][:])
+            w = np.array(ind[1][:])
+
+            if random() > f:
+                c[int(random() * len(c))] += np.array([gauss(0, m_range) for i in range(len(c[0]))])
+            else:
+                w[int(random() * len(w))] += np.array([gauss(0, m_range) for i in range(len(w[0]))])
+
+            return (c, w)
+
+        def cv(ind1, ind2):
+            point = int(random() * len(ind1[0][0]))
+            c = np.hstack([np.array(ind1[0])[:, point:], np.array(ind2[0])[:, :point]]).tolist()
+            w = np.hstack([np.array(ind1[1])[:, point:], np.array(ind2[1])[:, :point]]).tolist()
+
+            return (c, w)
+
         if verbose:
             print('Initialization completed, \ttime: %0.2f' % (time() - start_time))
 
-        population = [generate_random_tree(num_features,
-                                           lambda: [random() for i in range(len(self.pool))],
-                                           max_init_depth) for i in range(n_trees)]
+        population = [[[[random() * 2 - 1 for j in range(num_features)] for k in range(n_clusters)],
+                       [[random() for j in range(len(self.pool))] for k in range(n_clusters)]
+                       ] for i in range(n_population)]
         elite = None
         best_in_cycle = [(0, 0)]
         no_improvement_cycles = 0
@@ -76,32 +100,22 @@ class AdaSS:
                 mutation = dc(sample(range(len(population)), int(len(population) * f_mut)))
                 crossover = dc(sample(range(len(population)), int(len(population) * f_co)))
 
-                for tree_index in mutation:
-                    new_generation.append(tree_mutation(population[tree_index],
-                                                        num_features,
-                                                        lambda: [random() for i in range(len(self.pool))],
-                                                        f1=0.8 * (1 - cycle / max_iterations),
-                                                        f2=0.2))
+                for chr_index in mutation:
+                    new_generation.append(mt(population[chr_index], mut_range, cycle / max_iterations))
 
-                for tree_index in crossover:
-                    new_generation.append(crossover_trees(population[tree_index],
-                                                          population[choice(crossover)]))
+                for chr_index in crossover:
+                    new_generation.append(cv(population[chr_index], population[choice(crossover)]))
 
                 population = dc(new_generation) + dc(elite)
 
-            tree_sizes = [tree.check_descendants() + 1 for tree in population]
-            if verbose:
-                print('Population size:\t%d' % len(population))
-                print('Tree size \tMin: %d\tMax: %d\tAverage: %0.1f' %
-                      (min(tree_sizes), max(tree_sizes), np.mean(tree_sizes)))
-            accuracy_train = sorted([(evaluate_tree(tree, 'train'), tree_index)
-                                     for tree_index, tree in enumerate(population)], key=lambda x: x[0])[::-1]
-            accuracy_validation = sorted([(evaluate_tree(tree, 'validation'), tree_index)
-                                          for tree_index, tree in enumerate(population)], key=lambda x: x[0])[::-1]
-            elite = [dc(population[tree_index[1]]) for tree_index in accuracy_train[:int(n_trees * f_el)]]
+            accuracy_train = sorted([(evaluate_chromosome(chr[0], chr[1], 'train'), chr_index)
+                                     for chr_index, chr in enumerate(population)], key=lambda x: x[0])[::-1]
+            accuracy_validation = sorted([(evaluate_chromosome(chr[0], chr[1], 'validation'), chr_index)
+                                          for chr_index, chr in enumerate(population)], key=lambda x: x[0])[::-1]
+            elite = [dc(population[chr_index[1]]) for chr_index in accuracy_train[:int(n_clusters * f_el)]]
             best_in_cycle.append((accuracy_train[0][0], accuracy_validation[0][0]))
             if verbose:
-                print('Best in cycle trees: %0.4f, %0.4f, \ttime: %0.2f' % (*best_in_cycle[-1], time() - start_time))
+                print('Best in cycle: %0.4f, %0.4f, \ttime: %0.2f' % (*best_in_cycle[-1], time() - start_time))
 
             no_improvement_cycles = no_improvement_cycles + 1 \
                 if best_in_cycle[-1][1] <= sorted(best_in_cycle[:-1], key=lambda x: x[1])[-1][1] \
@@ -109,14 +123,16 @@ class AdaSS:
             if verbose:
                 print(('\033[93mNo improvement\033[0m' if no_improvement_cycles > 0 else '\033[92mImprovement\033[0m'))
             if no_improvement_cycles == decay_time:
-                self.tree = population[accuracy_train[0][1]]
+                self.model = population[accuracy_train[0][1]]
                 break
 
         return best_in_cycle[1:]
 
     def predict(self, test, **kwargs):
         labels = np.transpose([classifier.predict(test) for classifier in self.pool])
-        weights = self.tree.eval(test)
+        distances = np.asarray([np.asarray(test) - centroid for centroid in self.model[0]])
+        distances = np.transpose(np.sum(distances * distances, axis=2)).tolist()
+        weights = [self.model[1][obs.index(min(obs))] for obs in distances]
         classes = np.max(labels)
         categorical_labels = np.zeros((len(test), classes + 1)).tolist()
         for object_index in range(len(test)):

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from random import choice, seed
 from adass import AdaSS
 from adass_class_dependent_fuser import AdaSS as AdaSSDF
-from load_cmc import load_cmc
+from load_dataset import *
 from pool_methods import BootstrapPool
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import KFold
@@ -30,7 +30,7 @@ for learn_indexes, test_indexes in kfold5.split(objects, labels):
     learn = [[objects[index] for index in learn_indexes], [labels[index] for index in learn_indexes]]
     test = [[objects[index] for index in test_indexes], [labels[index] for index in test_indexes]]
 
-    kfold2 = KFold(n_splits=2, random_state=random_seed)
+    kfold2 = KFold(n_splits=2, random_state=(random_seed + 1))
     for train_indexes, val_indexes in kfold2.split(learn[0]):
         update_progress(iterator)
         train = [[learn[0][index] for index in train_indexes], [learn[1][index] for index in train_indexes]]
@@ -44,12 +44,12 @@ for learn_indexes, test_indexes in kfold5.split(objects, labels):
         adass = AdaSS(pool=pool)
         adass.fit(train=train,
                   validation=validation,
-                  max_init_depth=5,
+                  max_init_depth=12,
                   decay_time=3,
                   max_iterations=20,
-                  f_co=0.8,
-                  f_mut=0.1,
-                  f_el=0.1,
+                  f_co=0.65,
+                  f_mut=0.2,
+                  f_el=0.15,
                   n_trees=40)
 
         iterator += 1
@@ -62,12 +62,12 @@ for learn_indexes, test_indexes in kfold5.split(objects, labels):
         adassdf = AdaSSDF(pool=pool)
         adassdf.fit(train=train,
                     validation=validation,
-                    max_init_depth=5,
+                    max_init_depth=12,
                     decay_time=3,
                     max_iterations=20,
-                    f_co=0.8,
-                    f_mut=0.1,
-                    f_el=0.1,
+                    f_co=0.65,
+                    f_mut=0.2,
+                    f_el=0.15,
                     n_trees=40)
 
         scores.append(
