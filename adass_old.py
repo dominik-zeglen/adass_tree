@@ -23,8 +23,8 @@ class AdaSS:
             raise Exception('Factors do not sum to 1')
 
         learn = np.random.permutation(np.transpose(learn))
-        train = np.transpose(learn[:int(len(learn) / 2)]).tolist()
-        validation = np.transpose(learn[int(len(learn) / 2):]).tolist()
+        train = np.transpose(learn[:int(len(learn) * 2 / 3)]).tolist()
+        validation = np.transpose(learn[int(len(learn) * 2 / 3):]).tolist()
         num_features = len(train[0][0])
         num_classes = len(Counter(train[1]))
         num_t_obs = len(train[0])
@@ -122,8 +122,8 @@ class AdaSS:
                 else 0
             if verbose:
                 print(('\033[93mNo improvement\033[0m' if no_improvement_cycles > 0 else '\033[92mImprovement\033[0m'))
-            if no_improvement_cycles == decay_time:
-                self.model = population[accuracy_train[0][1]]
+            if no_improvement_cycles == decay_time or cycle == (max_iterations - 1):
+                self.model = dc(population[accuracy_train[0][1]])
                 break
 
         return best_in_cycle[1:]
