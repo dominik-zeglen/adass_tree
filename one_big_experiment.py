@@ -117,7 +117,7 @@ if __name__ == '__main__':
             for name, dataset in load_dataset.__dict__.items() if callable(dataset)]
     lock = process_pool.starmap(eval_dataset, args)
 
-    for name, dataset in load_dataset.__dict__.items():
+    for name, dataset in [*load_dataset.__dict__.items()][:2]:
         if callable(dataset):
             print('')
             for i in range(3 * len(params) + 1):
