@@ -3,7 +3,6 @@ from random import random, choice, sample, gauss
 from time import time
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class AdaSS:
