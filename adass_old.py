@@ -11,17 +11,16 @@ class AdaSS:
         self.pool = dc(kwargs['pool'])
         self.model = None
 
-    def fit(self, n_clusters, max_iterations, decay_time, f_mut, f_co, f_el,
-            n_population, mut_range, learn, verbose=False, **kwargs):
+    def fit(self, X, y, n_clusters, max_iterations, decay_time, f_mut, f_co, f_el,
+            n_population, mut_range, verbose=False, **kwargs):
         from collections import Counter
-        from sklearn.model_selection import ShuffleSplit
-        from numpy.linalg import norm
 
         start_time = time()
 
         if f_mut + f_co + f_el != 1:
             raise Exception('Factors do not sum to 1')
 
+        learn = X, y
         learn = np.random.permutation(np.transpose(learn))
         train = np.transpose(learn[:int(len(learn) * 2 / 3)]).tolist()
         validation = np.transpose(learn[int(len(learn) * 2 / 3):]).tolist()

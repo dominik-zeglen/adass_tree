@@ -11,8 +11,8 @@ class AdaSS:
         self.pool = dc(kwargs['pool'])
         self.tree = None
 
-    def fit(self, max_init_depth, max_iterations, decay_time, f_mut, f_co, f_el,
-            n_trees, learn, verbose=False, **kwargs):
+    def fit(self, X, y, max_init_depth, max_iterations, decay_time, f_mut, f_co, f_el,
+            n_trees, verbose=False, **kwargs):
         from collections import Counter
 
         start_time = time()
@@ -20,6 +20,7 @@ class AdaSS:
         if f_mut + f_co + f_el != 1:
             raise Exception('Factors do not sum to 1')
 
+        learn = [X, y]
         learn = np.random.permutation(np.transpose(learn))
         train = np.transpose(learn[:int(len(learn) * 2 / 3)]).tolist()
         validation = np.transpose(learn[int(len(learn) * 2 / 3):]).tolist()
